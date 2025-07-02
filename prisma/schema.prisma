@@ -1,0 +1,370 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EXPLORER  // Wants to move abroad
+  ABROADER  // Already living/working/studying abroad
+}
+
+model User {
+  id              String    @id @default(uuid())
+  username        String    @unique
+  email           String    @unique
+  password        String
+  role            UserRole  @default(EXPLORER)
+  avatar          String?
+  bio             String?
+  currentCity     String?
+  currentCountry  String?
+  targetCountry   String?
+  techStack       String[]
+  isOnline        Boolean   @default(false)
+  lastSeen        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  posts           Post[]
+  comments        Comment[]
+  postVotes       PostVote[]
+  postSaves       PostSave[]
+  cityReviewSaves CityReviewSave[]
+  commentVotes    CommentVote[]
+  cityReviews     CityReview[]
+  cityReviewVotes CityReviewVote[]
+  cityReviewComments CityReviewComment[]
+  cityReviewCommentVotes CityReviewCommentVote[]
+  createdRooms    Room[]    @relation("RoomCreator")
+  roomMemberships RoomMember[]
+  messages        Message[]
+
+  @@map("users")
+}
+
+model City {
+  id          String   @id @default(uuid())
+  name        String
+  country     String
+  slug        String   @unique // e.g., "berlin-germany"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  reviews     CityReview[]
+  posts       Post[]
+
+  @@map("cities")
+}
+
+model CityReview {
+  id                 String   @id @default(uuid())
+  userId             String
+  cityId             String
+  title              String?  // Short summary/title for the review
+  jobOpportunities   Int      @default(3)
+  costOfLiving       Int      @default(3)
+  safety             Int      @default(3)
+  transport          Int      @default(3)
+  community          Int      @default(3)
+  healthcare         Int      @default(3)
+  education          Int      @default(3)
+  nightlife          Int      @default(3)
+  weather            Int      @default(3)
+  internet           Int      @default(3)
+  pros               String[] // List of pros
+  cons               String[] // List of cons
+  note               String?
+  images             String[] // URLs to images
+  likes              Int      @default(0)
+  upvotes            Int      @default(0)
+  downvotes          Int      @default(0)
+  commentsCount      Int      @default(0)
+  language           String?  // e.g., "en", "tr"
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city               City     @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  votes              CityReviewVote[]
+  saves              CityReviewSave[]
+  comments           CityReviewComment[]
+
+  @@unique([userId, cityId])
+  @@index([cityId])
+  @@index([userId])
+  @@map("city_reviews")
+}
+
+model CityReviewComment {
+  id                  String   @id @default(uuid())
+  userId              String
+  cityReviewId        String
+  parentCommentId     String?              // Self-reference for nested replies
+  content             String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cityReview          CityReview  @relation(fields: [cityReviewId], references: [id], onDelete: Cascade)
+
+  // Self-referencing relation (a comment can have many replies)
+  parentComment       CityReviewComment? @relation("CityReviewCommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies             CityReviewComment[] @relation("CityReviewCommentReplies")
+  votes               CityReviewCommentVote[]
+
+  @@map("city_review_comments")
+}
+
+model CityReviewCommentVote {
+  id                  String   @id @default(uuid())
+  userId              String
+  cityReviewCommentId String
+  type                VoteType
+  createdAt           DateTime @default(now())
+
+  // Relations
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cityReviewComment   CityReviewComment    @relation(fields: [cityReviewCommentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cityReviewCommentId])
+  @@index([cityReviewCommentId])
+  @@index([userId])
+  @@map("city_review_comment_votes")
+}
+
+enum PostCategory {
+  REVIEW
+  GUIDE
+  EXPERIENCE
+  QUESTION
+  DISCUSSION
+  TIP
+}
+
+enum PostTag {
+  JOB
+  VISA
+  CULTURE
+  REMOTE
+  STUDY
+  HOUSING
+  LANGUAGE
+  NETWORKING
+  INTERVIEW
+  SALARY
+  EXPLORER
+  WORK
+}
+
+model Post {
+  id            String      @id @default(uuid())
+  userId        String
+  cityId        String?
+  title         String
+  content       String
+  category      PostCategory @default(DISCUSSION)
+  tags          PostTag[]
+  hashtags      String[]    // Flexible hashtag system
+  images        String[]    @default([]) // URLs of images attached to the post
+  location      String?     // Flexible location string
+  commentsCount Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  // Relations
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city          City?       @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  comments      Comment[]
+  votes         PostVote[]
+  saves         PostSave[]
+
+  @@index([userId])
+  @@index([cityId])
+  @@index([category])
+  @@index([createdAt])
+  @@map("posts")
+}
+
+model Comment {
+  id              String   @id @default(uuid())
+  userId          String
+  postId          String
+  parentCommentId String?              // Self-reference for nested replies
+  content         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post            Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  // Self-referencing relation (a comment can have many replies)
+  parentComment   Comment? @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies        Comment[] @relation("CommentReplies")
+  votes          CommentVote[]
+
+  @@map("comments")
+}
+
+enum VoteType {
+  UPVOTE
+  DOWNVOTE
+}
+
+model PostVote {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String
+  type      VoteType
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId])
+  @@map("post_votes")
+}
+
+model PostSave {
+  id        String   @id @default(uuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId])
+  @@map("post_saves")
+}
+
+model CityReviewVote {
+  id             String   @id @default(uuid())
+  userId         String
+  cityReviewId   String
+  type           VoteType
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cityReview     CityReview  @relation(fields: [cityReviewId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cityReviewId])
+  @@index([cityReviewId])
+  @@index([userId])
+  @@map("city_review_votes")
+}
+
+model CityReviewSave {
+  id             String   @id @default(uuid())
+  userId         String
+  cityReviewId   String
+  createdAt      DateTime @default(now())
+
+  // Relations
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cityReview     CityReview  @relation(fields: [cityReviewId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cityReviewId])
+  @@index([cityReviewId])
+  @@index([userId])
+  @@map("city_review_saves")
+}
+
+enum RoomType {
+  COUNTRY     // Based on target country
+  STUDY       // Study groups
+  INTERVIEW   // Interview prep
+  LANGUAGE    // Language learning
+  GENERAL     // General discussion
+}
+
+model Room {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  type        RoomType @default(GENERAL)
+  country     String?  // For country-based rooms
+  isPublic    Boolean  @default(true)
+  maxMembers  Int      @default(100)
+  memberCount Int      @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdBy   User         @relation("RoomCreator", fields: [createdById], references: [id])
+  members     RoomMember[]
+  messages    Message[]
+
+  @@map("rooms")
+}
+
+model RoomMember {
+  id       String   @id @default(uuid())
+  userId   String
+  roomId   String
+  joinedAt DateTime @default(now())
+  isAdmin  Boolean  @default(false)
+
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roomId])
+  @@map("room_members")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  userId    String
+  roomId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model CommentVote {
+  id        String   @id @default(uuid())
+  userId    String
+  commentId String
+  type      VoteType
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, commentId])
+  @@index([commentId])
+  @@index([userId])
+  @@map("comment_votes")
+} 

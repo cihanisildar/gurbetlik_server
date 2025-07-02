@@ -1,0 +1,15 @@
+-- CreateEnum
+CREATE TYPE "ReviewStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+
+-- AlterTable
+ALTER TABLE "city_reviews" ADD COLUMN     "cons" TEXT[],
+ADD COLUMN     "education" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "healthcare" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "images" TEXT[],
+ADD COLUMN     "internet" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "language" TEXT,
+ADD COLUMN     "likes" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "nightlife" INTEGER NOT NULL DEFAULT 3,
+ADD COLUMN     "pros" TEXT[],
+ADD COLUMN     "title" TEXT,
+ADD COLUMN     "weather" INTEGER NOT NULL DEFAULT 3;
