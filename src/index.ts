@@ -39,23 +39,21 @@ const corsOptions = {
       process.env.FRONTEND_URL || "http://localhost:3000",
       "http://localhost:3001",
       "http://localhost:3002",
-      "https://yourdomain.com", // Add your production domain here
-      "https://www.yourdomain.com" // Add your production www domain here
+      "https://gurbetlik-client.vercel.app", // Production domain
+      "https://gurbetlik-client-git-main-cihanisildars-projects.vercel.app", // Preview deployment
+      "https://gurbetlik-client-9z8l1g826-cihanisildars-projects.vercel.app", // Preview deployment
+      "https://gurbetlik-client-cihanisildar.vercel.app" // Alternative Vercel URL
     ];
     
-    // Only allow requests from allowed origins or same-origin requests
-    // Remove the blanket allowance for requests with no origin
+    // Allow requests with no origin (server-to-server, health checks, etc.)
     if (!origin) {
-      // Only allow same-origin requests (server-to-server) in development
-      if (process.env.NODE_ENV === 'production') {
-        return callback(new Error('Not allowed by CORS policy'));
-      }
-      return callback(null, true); // Allow for development only
+      return callback(null, true);
     }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log(`CORS blocked origin: ${origin}`);
       callback(new Error('Not allowed by CORS policy'));
     }
   },
@@ -85,21 +83,21 @@ const io = new Server(server, {
         process.env.FRONTEND_URL || "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
-        "https://yourdomain.com",
-        "https://www.yourdomain.com"
+        "https://gurbetlik-client.vercel.app", // Production domain
+        "https://gurbetlik-client-git-main-cihanisildars-projects.vercel.app", // Preview deployment
+        "https://gurbetlik-client-9z8l1g826-cihanisildars-projects.vercel.app", // Preview deployment
+        "https://gurbetlik-client-cihanisildar.vercel.app" // Alternative Vercel URL
       ];
       
-      // Apply same security policy as main CORS
+      // Allow requests with no origin (server-to-server, health checks, etc.)
       if (!origin) {
-        if (process.env.NODE_ENV === 'production') {
-          return callback(new Error('Not allowed by CORS policy'));
-        }
-        return callback(null, true); // Allow for development only
+        return callback(null, true);
       }
       
       if (allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
+        console.log(`Socket.IO CORS blocked origin: ${origin}`);
         callback(new Error('Not allowed by CORS policy'));
       }
     },
