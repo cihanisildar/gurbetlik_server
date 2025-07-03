@@ -25,6 +25,31 @@ import { swaggerSpec } from './config/swagger';
 // Load environment variables
 dotenv.config();
 
+// Validate required environment variables
+const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:');
+  missingEnvVars.forEach(varName => {
+    console.error(`  - ${varName}`);
+  });
+  process.exit(1);
+}
+
+// Warn about optional but recommended environment variables
+const recommendedEnvVars = ['JWT_REFRESH_SECRET', 'FRONTEND_URL'];
+const missingRecommended = recommendedEnvVars.filter(varName => !process.env[varName]);
+
+if (missingRecommended.length > 0) {
+  console.warn('⚠️  Missing recommended environment variables:');
+  missingRecommended.forEach(varName => {
+    console.warn(`  - ${varName}`);
+  });
+}
+
+console.log('✅ Environment variables loaded successfully');
+
 // Initialize Prisma client
 export const prisma = new PrismaClient();
 
@@ -47,13 +72,16 @@ const corsOptions = {
     
     // Allow requests with no origin (server-to-server, health checks, etc.)
     if (!origin) {
+      console.log('[CORS] Request with no origin - allowing');
       return callback(null, true);
     }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log(`[CORS] Origin allowed: ${origin}`);
       callback(null, true);
     } else {
-      console.log(`CORS blocked origin: ${origin}`);
+      console.log(`[CORS] Origin blocked: ${origin}`);
+      console.log('[CORS] Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS policy'));
     }
   },
@@ -161,6 +189,22 @@ app.get('/health', (req, res) => {
     websocket: 'active',
     documentation: '/api-docs'
   });
+});
+
+// Debug endpoint for production troubleshooting
+app.get('/debug/env', (req, res) => {
+  const envDebug = {
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+    JWT_SECRET: process.env.JWT_SECRET ? '✓ Set' : '✗ Missing',
+    JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET ? '✓ Set' : '✗ Missing',
+    COOKIE_DOMAIN: process.env.COOKIE_DOMAIN ? `✓ Set: ${process.env.COOKIE_DOMAIN}` : '✗ Not set',
+    FRONTEND_URL: process.env.FRONTEND_URL ? `✓ Set: ${process.env.FRONTEND_URL}` : '✗ Not set',
+    DATABASE_URL: process.env.DATABASE_URL ? '✓ Set' : '✗ Missing',
+    timestamp: new Date().toISOString()
+  };
+  
+  res.json(envDebug);
 });
 
 // API routes

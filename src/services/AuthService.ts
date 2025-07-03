@@ -15,6 +15,7 @@ const generateAccessToken = (userId: string, email: string): string => {
 
 const generateRefreshToken = (userId: string, email: string): string => {
   if (!jwtRefreshSecret) {
+    console.error('[Auth] JWT_REFRESH_SECRET is not configured - refresh tokens will not work');
     throw new Error('JWT_REFRESH_SECRET is not configured');
   }
   return jwt.sign(
@@ -32,6 +33,7 @@ export const verifyAccessToken = (token: string): { userId: string; email: strin
     }
     return decoded;
   } catch (error) {
+    console.error('[Auth] Access token verification failed:', error);
     throw new Error('Invalid access token');
   }
 };
@@ -39,6 +41,7 @@ export const verifyAccessToken = (token: string): { userId: string; email: strin
 export const verifyRefreshToken = (token: string): { userId: string; email: string } => {
   try {
     if (!jwtRefreshSecret) {
+      console.error('[Auth] JWT_REFRESH_SECRET is not configured');
       throw new Error('JWT_REFRESH_SECRET is not configured');
     }
     const decoded = jwt.verify(token, jwtRefreshSecret) as { userId: string; email: string; type: string };
@@ -47,88 +50,115 @@ export const verifyRefreshToken = (token: string): { userId: string; email: stri
     }
     return decoded;
   } catch (error) {
+    console.error('[Auth] Refresh token verification failed:', error);
     throw new Error('Invalid refresh token');
   }
 };
 
 export const register = async (prisma: PrismaClient, userData: RegisterDto): Promise<{ user: UserResponse; accessToken: string; refreshToken: string }> => {
-  // Check if user already exists
-  const existingUser = await userRepository.findByEmail(prisma, userData.email);
+  try {
+    console.log(`[Auth] Attempting to register user: ${userData.email}`);
+    
+    // Check if user already exists
+    const existingUser = await userRepository.findByEmail(prisma, userData.email);
 
-  if (existingUser) {
-    // Use generic error message to prevent user enumeration
-    throw new Error('Registration failed. Please check your information and try again.');
+    if (existingUser) {
+      console.log(`[Auth] Registration failed - user already exists: ${userData.email}`);
+      // Use generic error message to prevent user enumeration
+      throw new Error('Registration failed. Please check your information and try again.');
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(userData.password, bcryptRounds);
+
+    // Create user
+    const user = await userRepository.create(prisma, {
+      username: userData.username,
+      email: userData.email,
+      password: hashedPassword,
+      role: userData.role
+    });
+
+    console.log(`[Auth] User created successfully: ${user.email}`);
+
+    // Generate tokens
+    const accessToken = generateAccessToken(user.id, user.email);
+    const refreshToken = generateRefreshToken(user.id, user.email);
+
+    console.log(`[Auth] Tokens generated successfully for user: ${user.email}`);
+
+    // Transform user data to match UserResponse type
+    const userResponse: UserResponse = {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      currentCity: user.currentCity,
+      currentCountry: user.currentCountry,
+      targetCountry: user.targetCountry,
+      techStack: Array.isArray(user.techStack) ? JSON.stringify(user.techStack) : null,
+      bio: user.bio,
+      avatar: user.avatar,
+      isOnline: user.isOnline,
+      lastSeen: user.lastSeen,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+
+    return { user: userResponse, accessToken, refreshToken };
+  } catch (error) {
+    console.error(`[Auth] Registration failed for ${userData.email}:`, error);
+    throw error;
   }
-
-  // Hash password
-  const hashedPassword = await bcrypt.hash(userData.password, bcryptRounds);
-
-  // Create user
-  const user = await userRepository.create(prisma, {
-    username: userData.username,
-    email: userData.email,
-    password: hashedPassword,
-    role: userData.role
-  });
-
-  // Generate tokens
-  const accessToken = generateAccessToken(user.id, user.email);
-  const refreshToken = generateRefreshToken(user.id, user.email);
-
-  // Transform user data to match UserResponse type
-  const userResponse: UserResponse = {
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    role: user.role,
-    currentCity: user.currentCity,
-    currentCountry: user.currentCountry,
-    targetCountry: user.targetCountry,
-    techStack: Array.isArray(user.techStack) ? JSON.stringify(user.techStack) : null,
-    bio: user.bio,
-    avatar: user.avatar,
-    isOnline: user.isOnline,
-    lastSeen: user.lastSeen,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
-  };
-
-  return { user: userResponse, accessToken, refreshToken };
 };
 
 export const login = async (prisma: PrismaClient, loginData: LoginDto): Promise<{ user: UserResponse; accessToken: string; refreshToken: string }> => {
-  // Find user by email
-  const user = await userRepository.findByEmail(prisma, loginData.email);
+  try {
+    console.log(`[Auth] Attempting to login user: ${loginData.email}`);
+    
+    // Find user by email
+    const user = await userRepository.findByEmail(prisma, loginData.email);
 
-  if (!user) {
-    throw new Error('Invalid email or password');
+    if (!user) {
+      console.log(`[Auth] Login failed - user not found: ${loginData.email}`);
+      throw new Error('Invalid email or password');
+    }
+
+    // Check password
+    if (!user.password) {
+      console.log(`[Auth] Login failed - no password set for user: ${loginData.email}`);
+      throw new Error('Please use Google OAuth to login');
+    }
+
+    const isValidPassword = await bcrypt.compare(loginData.password, user.password);
+    if (!isValidPassword) {
+      console.log(`[Auth] Login failed - invalid password for user: ${loginData.email}`);
+      throw new Error('Invalid email or password');
+    }
+
+    // Update online status
+    await userRepository.updateOnlineStatus(prisma, user.id, true);
+
+    // Remove password from response and transform techStack
+    const { password, ...userWithoutPassword } = user;
+    const userResponse: UserResponse = {
+      ...userWithoutPassword,
+      techStack: Array.isArray(userWithoutPassword.techStack) ? JSON.stringify(userWithoutPassword.techStack) : null
+    };
+
+    console.log(`[Auth] User authenticated successfully: ${user.email}`);
+
+    // Generate tokens
+    const accessToken = generateAccessToken(user.id, user.email);
+    const refreshToken = generateRefreshToken(user.id, user.email);
+
+    console.log(`[Auth] Tokens generated successfully for user: ${user.email}`);
+
+    return { user: userResponse, accessToken, refreshToken };
+  } catch (error) {
+    console.error(`[Auth] Login failed for ${loginData.email}:`, error);
+    throw error;
   }
-
-  // Check password
-  if (!user.password) {
-    throw new Error('Please use Google OAuth to login');
-  }
-
-  const isValidPassword = await bcrypt.compare(loginData.password, user.password);
-  if (!isValidPassword) {
-    throw new Error('Invalid email or password');
-  }
-
-  // Update online status
-  await userRepository.updateOnlineStatus(prisma, user.id, true);
-
-  // Remove password from response and transform techStack
-  const { password, ...userWithoutPassword } = user;
-  const userResponse: UserResponse = {
-    ...userWithoutPassword,
-    techStack: Array.isArray(userWithoutPassword.techStack) ? JSON.stringify(userWithoutPassword.techStack) : null
-  };
-
-  // Generate tokens
-  const accessToken = generateAccessToken(user.id, user.email);
-  const refreshToken = generateRefreshToken(user.id, user.email);
-
-  return { user: userResponse, accessToken, refreshToken };
 };
 
 export const googleAuth = async (prisma: PrismaClient, googleProfile: any): Promise<{ user: UserResponse; accessToken: string; refreshToken: string; isNewUser: boolean }> => {

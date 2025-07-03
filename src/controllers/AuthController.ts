@@ -11,6 +11,27 @@ import {
 } from '../types';
 import * as s3Service from '../services/S3Service';
 
+const getCookieOptions = (isProduction: boolean) => {
+  const baseOptions = {
+    httpOnly: true,
+    secure: isProduction, // Only require HTTPS in production
+    path: '/',
+    sameSite: isProduction ? 'none' as const : 'lax' as const, // 'none' for cross-origin in prod, 'lax' for dev
+  };
+
+  // In production, don't set domain to allow cross-origin cookies
+  // Only add domain if explicitly set in environment variables
+  if (process.env.COOKIE_DOMAIN) {
+    return {
+      ...baseOptions,
+      domain: process.env.COOKIE_DOMAIN
+    };
+  }
+
+  // For production without COOKIE_DOMAIN, ensure cookies work cross-origin
+  return baseOptions;
+};
+
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const validation = validateRequest(RegisterSchema, req.body);
@@ -20,33 +41,27 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 
     const result = await authService.register(prisma, validation.data);
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = getCookieOptions(isProduction);
 
     // Set secure HTTP-only cookies
     res.cookie('gb_accessToken', result.accessToken, {
-      httpOnly: true,
-      secure: true, // Always require HTTPS for security
-      sameSite: 'strict',
+      ...cookieOptions,
       maxAge: 15 * 60 * 1000, // 15 minutes
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN // Allow setting cookie domain for production
     });
 
     res.cookie('gb_refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: true, // Always require HTTPS for security
-      sameSite: 'strict',
+      ...cookieOptions,
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
     });
 
-    // Remove the insecure client-side accessible token cookie
-    // Client should use the secure httpOnly cookies instead
-
+    console.log(`[Auth] User registered successfully: ${result.user.email}`);
+    
     res.status(201).json(createSuccessResponse('User registered successfully', {
       user: result.user
     }));
   } catch (error) {
+    console.error('[Auth] Registration failed:', error);
     res.status(400).json(createErrorResponse('Registration failed', error instanceof Error ? error.message : 'Unknown error'));
   }
 };
@@ -60,30 +75,33 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const result = await authService.login(prisma, validation.data);
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = getCookieOptions(isProduction);
 
     // Set secure HTTP-only cookies
     res.cookie('gb_accessToken', result.accessToken, {
-      httpOnly: true,
-      secure: true, // Always require HTTPS for security
-      sameSite: 'strict',
+      ...cookieOptions,
       maxAge: 15 * 60 * 1000, // 15 minutes
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
     });
 
     res.cookie('gb_refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: true, // Always require HTTPS for security
-      sameSite: 'strict',
+      ...cookieOptions,
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
+    });
+
+    console.log(`[Auth] User logged in successfully: ${result.user.email}`);
+    console.log(`[Auth] Cookies set with options:`, {
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      domain: cookieOptions.domain || 'not set',
+      httpOnly: cookieOptions.httpOnly
     });
 
     res.json(createSuccessResponse('Login successful', {
       user: result.user
     }));
   } catch (error) {
+    console.error('[Auth] Login failed:', error);
     res.status(401).json(createErrorResponse('Login failed', error instanceof Error ? error.message : 'Unknown error'));
   }
 };
@@ -98,43 +116,28 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
     }
 
     const result = await authService.refreshAccessToken(prisma, refreshToken);
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = getCookieOptions(isProduction);
 
     // Set new secure HTTP-only cookies
     res.cookie('gb_accessToken', result.accessToken, {
-      httpOnly: true,
-      secure: true, // Always require HTTPS for security
-      sameSite: 'strict',
+      ...cookieOptions,
       maxAge: 15 * 60 * 1000, // 15 minutes
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
     });
 
     res.cookie('gb_refreshToken', result.refreshToken, {
-      httpOnly: true,
-      secure: true, // Always require HTTPS for security
-      sameSite: 'strict',
+      ...cookieOptions,
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
     });
 
     res.json(createSuccessResponse('Tokens refreshed successfully', null));
   } catch (error) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = getCookieOptions(isProduction);
+    
     // Clear invalid refresh token with secure settings
-    res.clearCookie('gb_refreshToken', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
-    });
-    res.clearCookie('gb_accessToken', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
-    });
+    res.clearCookie('gb_refreshToken', cookieOptions);
+    res.clearCookie('gb_accessToken', cookieOptions);
     
     res.status(401).json(createErrorResponse('Invalid refresh token', error instanceof Error ? error.message : 'Unknown error'));
   }
@@ -144,23 +147,13 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
     await authService.logout(prisma, userId);
+    
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = getCookieOptions(isProduction);
 
     // Clear authentication cookies with same security settings
-    res.clearCookie('gb_accessToken', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
-    });
-
-    res.clearCookie('gb_refreshToken', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN
-    });
+    res.clearCookie('gb_accessToken', cookieOptions);
+    res.clearCookie('gb_refreshToken', cookieOptions);
 
     res.json(createSuccessResponse('Logout successful', null));
   } catch (error) {

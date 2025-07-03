@@ -89,6 +89,48 @@ router.post('/register', authLimiter, authController.register);
  */
 router.post('/login', authLimiter, authController.login);
 
+// Debug endpoint for testing token generation
+router.post('/test-login', authLimiter, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password required'
+      });
+    }
+
+    // Import services here to avoid circular dependency
+    const authService = require('../services/AuthService');
+    const { prisma } = require('../index');
+    
+    const result = await authService.login(prisma, { email, password });
+    
+    // Return tokens in response body for testing (NOT for production use)
+    res.json({
+      success: true,
+      message: 'Login successful - tokens generated',
+      data: {
+        user: result.user,
+        hasAccessToken: !!result.accessToken,
+        hasRefreshToken: !!result.refreshToken,
+        accessTokenLength: result.accessToken ? result.accessToken.length : 0,
+        refreshTokenLength: result.refreshToken ? result.refreshToken.length : 0,
+        // Only return first 10 characters for security
+        accessTokenPreview: result.accessToken ? result.accessToken.substring(0, 10) + '...' : null,
+        refreshTokenPreview: result.refreshToken ? result.refreshToken.substring(0, 10) + '...' : null
+      }
+    });
+  } catch (error) {
+    res.status(401).json({
+      success: false,
+      message: 'Test login failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 /**
  * @swagger
  * /api/auth/refresh:
