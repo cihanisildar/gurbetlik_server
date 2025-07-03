@@ -29,6 +29,7 @@ dotenv.config();
 export const prisma = new PrismaClient();
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (needed for rate limiting behind load balancers)
 const server = createServer(app);
 
 // CORS configuration
