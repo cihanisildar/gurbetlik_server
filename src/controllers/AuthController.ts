@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Request, Response, CookieOptions } from 'express';
 import { prisma } from '../index';
 import * as authService from '../services/AuthService';
 import { 
@@ -11,7 +11,7 @@ import {
 } from '../types';
 import * as s3Service from '../services/S3Service';
 
-const getCookieOptions = (isProduction: boolean) => {
+const getCookieOptions = (isProduction: boolean): CookieOptions => {
   const baseOptions = {
     httpOnly: true,
     secure: isProduction, // Only require HTTPS in production
