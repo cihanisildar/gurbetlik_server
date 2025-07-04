@@ -297,3 +297,31 @@ const posts = await prisma.post.findMany({
 ---
 
 **Built with ❤️ for the global community of abroad seekers and helpers.** 
+
+## Production Cookie Domain Setup
+
+To ensure authentication cookies work across your frontend and backend in production (especially when deployed on different subdomains or domains), you **must** set the `COOKIE_DOMAIN` environment variable in your backend deployment environment.
+
+### Why?
+- Without `COOKIE_DOMAIN`, cookies are only valid for the backend's domain, and will not be accessible to the frontend if it's on a different domain or subdomain.
+- Setting `COOKIE_DOMAIN` to a common parent domain (e.g., `.yourdomain.com` or `.vercel.app` if both are subdomains) allows cookies to be shared cross-origin (with `SameSite=None` and `Secure=true`).
+
+### How to set
+- In your production environment (Vercel, Railway, etc.), add an environment variable:
+  - `COOKIE_DOMAIN=.gurbetlik-client.vercel.app` (or your actual parent domain)
+- Example for Vercel:
+  - Go to your project settings → Environment Variables
+  - Add: `COOKIE_DOMAIN` = `.gurbetlik-client.vercel.app`
+
+### Backend Code Reference
+- The backend reads this variable and sets the cookie domain accordingly in `src/controllers/AuthController.ts`:
+  ```js
+  if (process.env.COOKIE_DOMAIN) {
+    domain: process.env.COOKIE_DOMAIN
+  }
+  ```
+
+### Additional Notes
+- Make sure your frontend requests use `credentials: 'include'` (fetch) or `withCredentials: true` (axios).
+- CORS must allow credentials and the correct origin (already handled in `src/index.ts`).
+- Cookies will only be set on HTTPS in production (`secure: true`). 
