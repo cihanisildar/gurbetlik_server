@@ -19,16 +19,15 @@ const getCookieOptions = (isProduction: boolean): CookieOptions => {
     sameSite: isProduction ? 'none' as const : 'lax' as const, // 'none' for cross-origin in prod, 'lax' for dev
   };
 
-  // In production, don't set domain to allow cross-origin cookies
-  // Only add domain if explicitly set in environment variables
-  if (process.env.COOKIE_DOMAIN) {
+  // Only add domain if explicitly set and not empty in environment variables
+  if (process.env.COOKIE_DOMAIN && process.env.COOKIE_DOMAIN.trim() !== '') {
     return {
       ...baseOptions,
-      domain: process.env.COOKIE_DOMAIN
+      domain: process.env.COOKIE_DOMAIN.trim()
     };
   }
 
-  // For production without COOKIE_DOMAIN, ensure cookies work cross-origin
+  // For local development or production without COOKIE_DOMAIN, don't set domain
   return baseOptions;
 };
 

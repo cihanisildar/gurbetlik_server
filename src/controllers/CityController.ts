@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import * as cityService from '../services/CityService';
 import * as cityReviewCommentService from '../services/CityReviewCommentService';
+import { findById as findCityById } from '../repositories/CityRepository';
 import { 
   createErrorResponse, 
   createPaginatedResponse,
@@ -54,6 +55,36 @@ export const createReview = async (req: Request, res: Response): Promise<void> =
     const parsed = CityReviewSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json(createErrorResponse('Validation failed', JSON.stringify(parsed.error.errors)));
+      return;
+    }
+
+    // Check if city exists in database, if not create it from CSV data
+    try {
+      const existingCity = await prisma.city.findUnique({
+        where: { id: cityId }
+      });
+      
+      if (!existingCity) {
+        // If not found in database, try to find it in CSV data
+        const csvCity = await findCityById(cityId);
+        if (csvCity) {
+          // Create the city in the database
+          await prisma.city.create({
+            data: {
+              id: csvCity.id,
+              name: csvCity.name,
+              country: csvCity.country,
+              slug: `${csvCity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${csvCity.country.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${csvCity.id}`
+            }
+          });
+        } else {
+          res.status(400).json(createErrorResponse('City not found. Please provide a valid city ID.'));
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error handling cityId:', error);
+      res.status(400).json(createErrorResponse('Invalid city ID. Please provide a valid city ID.'));
       return;
     }
 

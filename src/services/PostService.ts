@@ -150,15 +150,6 @@ export const updatePost = async (prisma: PrismaClient, userId: string, postId: s
     throw new Error('Unauthorized: You can only edit your own posts');
   }
 
-  // Validate city exists if provided
-  if (postData.cityId) {
-    const { findById: findCityById } = await import('../repositories/CityRepository');
-    const city = await findCityById(postData.cityId);
-    if (!city) {
-      throw new Error('Selected city not found');
-    }
-  }
-
   // Handle images update: delete removed images from S3
   if (postData.images) {
     const existingImages: string[] = Array.isArray((existingPost as any).images) ? (existingPost as any).images : [];

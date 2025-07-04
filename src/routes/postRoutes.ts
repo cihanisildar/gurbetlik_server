@@ -164,9 +164,10 @@ router.get('/:id', generalLimiter, optionalAuth, postController.getPostById);
  *                 description: Country code (ISO 3166-1 alpha-2, e.g., TR for Turkey, US for United States)
  *               cityId:
  *                 type: string
+ *                 format: uuid
  *                 nullable: true
- *                 example: "12345"
- *                 description: City ID (must match countryCode)
+ *                 example: "550e8400-e29b-41d4-a716-446655440000"
+ *                 description: City ID (UUID)
  *         multipart/form-data:
  *           schema:
  *             type: object
@@ -192,8 +193,9 @@ router.get('/:id', generalLimiter, optionalAuth, postController.getPostById);
  *                 example: ["JOB", "CULTURE"]
  *               cityId:
  *                 type: string
- *                 example: "12345"
- *                 description: City ID
+ *                 format: uuid
+ *                 example: "550e8400-e29b-41d4-a716-446655440000"
+ *                 description: City ID (UUID)
  *               images:
  *                 type: array
  *                 items:
@@ -598,8 +600,9 @@ router.get('/with-comments', generalLimiter, optionalAuth, postController.getPos
  *                 example: ["JOB", "CULTURE", "HOUSING"]
  *               cityId:
  *                 type: string
- *                 example: "12345"
- *                 description: City ID
+ *                 format: uuid
+ *                 example: "550e8400-e29b-41d4-a716-446655440000"
+ *                 description: City ID (UUID)
  *     responses:
  *       200:
  *         description: Post updated successfully

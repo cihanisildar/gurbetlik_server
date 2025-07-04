@@ -34,7 +34,7 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
         content: req.body.content,
         category: req.body.category || 'DISCUSSION',
         tags: Array.isArray(req.body.tags) ? req.body.tags : [req.body.tags].filter(Boolean),
-        cityId: req.body.cityId || undefined
+        cityId: req.body.cityId || undefined 
       };
     } else {
       // Use JSON body as before
@@ -49,6 +49,41 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
 
     const { cityId, ...rest } = validation.data;
     
+    // Handle cityId validation and conversion
+    let finalCityId = cityId;
+    if (cityId) {
+      try {
+        // First try to find the city in the database
+        const existingCity = await prisma.city.findUnique({
+          where: { id: cityId }
+        });
+        
+        if (!existingCity) {
+          // If not found in database, try to find it in CSV data
+          const csvCity = await findCityById(cityId);
+          if (csvCity) {
+            // Create the city in the database
+            const newCity = await prisma.city.create({
+              data: {
+                id: csvCity.id,
+                name: csvCity.name,
+                country: csvCity.country,
+                slug: `${csvCity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${csvCity.country.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${csvCity.id}`
+              }
+            });
+            finalCityId = newCity.id;
+          } else {
+            res.status(400).json(createErrorResponse('City not found. Please provide a valid city ID.'));
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error handling cityId:', error);
+        res.status(400).json(createErrorResponse('Invalid city ID. Please provide a valid city ID.'));
+        return;
+      }
+    }
+    
     // Handle image uploads if present
     let imageUrls: string[] = [];
     const files = req.files as Express.Multer.File[] | undefined;
@@ -57,7 +92,7 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
       // Create post first to get ID for S3 upload
       const tempPostData = { 
         ...rest, 
-        ...(cityId && { cityId }),
+        ...(finalCityId && { cityId: finalCityId }),
         category: rest.category ?? 'DISCUSSION'
       };
       const tempPost = await postService.createPost(prisma, req.user.id, tempPostData);
@@ -74,7 +109,7 @@ export const createPost = async (req: Request, res: Response): Promise<void> => 
       // No images, create post normally
       const postDataWithCity = { 
         ...rest, 
-        ...(cityId && { cityId }),
+        ...(finalCityId && { cityId: finalCityId }),
         category: rest.category ?? 'DISCUSSION'
       };
       const post = await postService.createPost(prisma, req.user.id, postDataWithCity);
@@ -310,7 +345,43 @@ export const updatePost = async (req: Request, res: Response): Promise<void> => 
     }
 
     const { id } = paramsValidation.data as { id: string };
-    const post = await postService.updatePost(prisma, req.user.id, id, validation.data);
+    
+    // Handle cityId validation and conversion for updates
+    let updateData = validation.data;
+    if (updateData.cityId) {
+      try {
+        // First try to find the city in the database
+        const existingCity = await prisma.city.findUnique({
+          where: { id: updateData.cityId }
+        });
+        
+        if (!existingCity) {
+          // If not found in database, try to find it in CSV data
+          const csvCity = await findCityById(updateData.cityId);
+          if (csvCity) {
+            // Create the city in the database
+            const newCity = await prisma.city.create({
+              data: {
+                id: csvCity.id,
+                name: csvCity.name,
+                country: csvCity.country,
+                slug: `${csvCity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${csvCity.country.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${csvCity.id}`
+              }
+            });
+            updateData = { ...updateData, cityId: newCity.id };
+          } else {
+            res.status(400).json(createErrorResponse('City not found. Please provide a valid city ID.'));
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Error handling cityId in update:', error);
+        res.status(400).json(createErrorResponse('Invalid city ID. Please provide a valid city ID.'));
+        return;
+      }
+    }
+    
+    const post = await postService.updatePost(prisma, req.user.id, id, updateData);
 
     res.json(createSuccessResponse('Post updated successfully', post));
   } catch (error) {
