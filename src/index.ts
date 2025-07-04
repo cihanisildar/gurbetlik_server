@@ -65,9 +65,11 @@ const corsOptions = {
       "http://localhost:3001",
       "http://localhost:3002",
       "https://gurbetlik-client.vercel.app", // Production domain
-      "https://gurbetlik-client-git-main-cihanisildars-projects.vercel.app", // Preview deployment
-      "https://gurbetlik-client-9z8l1g826-cihanisildars-projects.vercel.app", // Preview deployment
-      "https://gurbetlik-client-cihanisildar.vercel.app" // Alternative Vercel URL
+      "https://api.abroado.com.tr",
+      "https://abroado.com.tr",
+      "https://abroado.com",
+      "https://www.abroado.com",
+      "https://www.abroado.com.tr",
     ];
     
     // Allow requests with no origin (server-to-server, health checks, etc.)
@@ -112,9 +114,11 @@ const io = new Server(server, {
         "http://localhost:3001",
         "http://localhost:3002",
         "https://gurbetlik-client.vercel.app", // Production domain
-        "https://gurbetlik-client-git-main-cihanisildars-projects.vercel.app", // Preview deployment
-        "https://gurbetlik-client-9z8l1g826-cihanisildars-projects.vercel.app", // Preview deployment
-        "https://gurbetlik-client-cihanisildar.vercel.app" // Alternative Vercel URL
+        "https://api.abroado.com.tr",
+        "https://abroado.com.tr",
+        "https://abroado.com",
+        "https://www.abroado.com",
+        "https://www.abroado.com.tr",
       ];
       
       // Allow requests with no origin (server-to-server, health checks, etc.)
