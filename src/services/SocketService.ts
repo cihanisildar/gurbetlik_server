@@ -349,7 +349,8 @@ export const initializeSocket = (io: SocketIOServer, prisma: PrismaClient) => {
     // Update user online status
     await updateUserOnlineStatus(prisma, userId, true);
 
-    console.log(`User ${userId} connected`);
+    console.log(`[Socket] User ${userId} connected. Total online users: ${userSockets.size}`);
+    console.log(`[Socket] Online user IDs:`, Array.from(userSockets.keys()));
 
     // Socket event handlers
     authenticatedSocket.on('join_room', (data: { roomId: string }) => {
@@ -453,12 +454,64 @@ export const sendToUser = (userId: string, event: string, data: any) => {
 };
 
 export const getOnlineMembersForRoom = async (prisma: PrismaClient, roomId: string): Promise<Partial<User>[]> => {
-  const socketIds = roomMembers.get(roomId) ? Array.from(roomMembers.get(roomId)!) : [];
-  const userIds = socketIds.map(socketId => socketUsers.get(socketId)).filter(Boolean);
-  if (userIds.length === 0) return [];
-  // Fetch user details from DB
-  return await prisma.user.findMany({
-    where: { id: { in: userIds as string[] } },
+  // Get all online user IDs (users connected via WebSocket)
+  const onlineUserIds = Array.from(userSockets.keys());
+  
+  console.log(`[Socket] Getting online members for room ${roomId}:`);
+  console.log(`[Socket] Total online users: ${onlineUserIds.length}`);
+  console.log(`[Socket] Online user IDs:`, onlineUserIds);
+  
+  if (onlineUserIds.length === 0) {
+    console.log(`[Socket] No online users found`);
+    return [];
+  }
+  
+  // First, let's check if the room exists and get its members
+  const roomWithMembers = await prisma.room.findUnique({
+    where: { id: roomId },
+    include: {
+      members: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              isOnline: true
+            }
+          }
+        }
+      }
+    }
+  });
+  
+  if (!roomWithMembers) {
+    console.log(`[Socket] Room ${roomId} not found`);
+    return [];
+  }
+  
+  console.log(`[Socket] Room ${roomId} has ${roomWithMembers.members.length} total members:`, 
+    roomWithMembers.members.map(m => ({ id: m.user.id, username: m.user.username, isOnline: m.user.isOnline }))
+  );
+  
+  // Check which of these members are online
+  const onlineMembersInRoom = roomWithMembers.members.filter(member => 
+    onlineUserIds.includes(member.user.id)
+  );
+  
+  console.log(`[Socket] Online members in room:`, 
+    onlineMembersInRoom.map(m => ({ id: m.user.id, username: m.user.username }))
+  );
+  
+  // Fetch all online users who are members of this room
+  const onlineMembers = await prisma.user.findMany({
+    where: { 
+      id: { in: onlineUserIds },
+      roomMemberships: {
+        some: {
+          roomId: roomId
+        }
+      }
+    },
     select: {
       id: true,
       username: true,
@@ -469,4 +522,8 @@ export const getOnlineMembersForRoom = async (prisma: PrismaClient, roomId: stri
       // add more fields if needed to match your User type
     }
   });
+  
+  console.log(`[Socket] Final online members for room ${roomId}:`, onlineMembers.map(u => u.username));
+  
+  return onlineMembers;
 };
